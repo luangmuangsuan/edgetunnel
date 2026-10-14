@@ -17,6 +17,8 @@ const 汇聚订阅_UA = 'v2rayN/edge' + 'tunnel (https://github.com/' + 特征�
 ///////////////////////////////////////////////////////主程序入口///////////////////////////////////////////////
 export default {
 	async fetch(request, env, ctx) {
+        let repairStage = 'start';
+        try {
 		let 请求URL文本 = request.url.replace(/%5[Cc]/g, '').replace(/\\/g, '');
 		const 请求URL锚点索引 = 请求URL文本.indexOf('#');
 		const 请求URL主体部分 = 请求URL锚点索引 === -1 ? 请求URL文本 : 请求URL文本.slice(0, 请求URL锚点索引);
@@ -29,7 +31,8 @@ export default {
 		const upgradeHeader = (request.headers.get('Upgrade') || '').toLowerCase(), contentType = (request.headers.get('content-type') || '').toLowerCase();
 		const 管理员密码 = env.ADMIN || env.admin || env.PASSWORD || env.password || env.pswd || env.TOKEN || env.KEY || env.UUID || env.uuid;
 		const 加密秘钥 = env.KEY || '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
-		const userIDMD5 = await MD5MD5(管理员密码 + 加密秘钥);
+		repairStage = 'md5';
+        const userIDMD5 = await MD5MD5(管理员密码 + 加密秘钥);
 		const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 		const envUUID = env.UUID || env.uuid;
 		const userID = (envUUID && uuidRegex.test(envUUID)) ? envUUID.toLowerCase() : [userIDMD5.slice(0, 8), userIDMD5.slice(8, 12), '4' + userIDMD5.slice(13, 16), '8' + userIDMD5.slice(17, 20), userIDMD5.slice(20)].join('-');
@@ -41,7 +44,8 @@ export default {
 		反代并发拨号数 = Math.max(1, Number(env.PROXY_CONCURRENT_DIAL) || 反代并发拨号数);
 		TCP并发拨号数 = Math.max(1, Number(env.TCP_CONCURRENT_DIAL) || TCP并发拨号数);
 		if (!env.TCP_CONCURRENT_DIAL && TCP并发拨号数 !== 1 && 识别运营商(request) === 'cmcc') TCP并发拨号数 = 1;
-		let 默认反代IP = (`${request.cf.colo}.${特征码字典[0]}.${特征码字典[1]}SsSs.nEt`).toLowerCase(), 默认反代兜底 = true;
+		repairStage = 'request-cf';
+        let 默认反代IP = (`${request.cf.colo}.${特征码字典[0]}.${特征码字典[1]}SsSs.nEt`).toLowerCase(), 默认反代兜底 = true;
 		if (env.PROXYIP) {
 			const proxyIPs = await 整理成数组(env.PROXYIP);
 			默认反代IP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
@@ -82,7 +86,8 @@ export default {
 		} else {
 			if (url.protocol === 'http:') return Response.redirect(url.href.replace(`http://${url.hostname}`, `https://${url.hostname}`), 301);
 			if (!管理员密码) return fetch(Pages静态页面 + '/noADMIN').then(r => { const headers = new Headers(r.headers); headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); headers.set('Pragma', 'no-cache'); headers.set('Expires', '0'); return new Response(r.body, { status: 404, statusText: r.statusText, headers }) });
-			if (env.KV && typeof env.KV.get === 'function') {
+			repairStage = 'admin-routing';
+            if (env.KV && typeof env.KV.get === 'function') {
 				const 区分大小写访问路径 = url.pathname.slice(1);
 				if (区分大小写访问路径 === 加密秘钥 && 加密秘钥 !== '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改') {//快速订阅
 					const params = new URLSearchParams(url.search);
@@ -526,6 +531,9 @@ export default {
 			return 反代响应;
 		} catch (error) { }
 		return new Response(await nginx(), { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+        } catch (error) {
+            return new Response('Worker runtime failure', { status: 500, headers: { 'X-EDT-Error-Type': String(error?.name || 'Error'), 'X-EDT-Error-Stage': repairStage, 'Cache-Control': 'no-store' } });
+        }
 	}
 };
 ///////////////////////////////////////////////////////////////////////叉HTTP传输数据///////////////////////////////////////////////
